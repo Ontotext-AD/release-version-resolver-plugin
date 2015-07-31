@@ -1,0 +1,4 @@
+<div>
+      Resolves next release version based on build type that you've selected. After successful resolvent you can use those two environment variables to configure other release built steps:
+      ${RELEASE_VERSION} and ${DEVELOPMENT_VERSION}
+</div>
