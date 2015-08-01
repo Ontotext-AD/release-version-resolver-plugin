@@ -138,6 +138,18 @@ public class ReleaseVersionResolver extends Builder {
 		return result;
 	}
 
+	public boolean isNoSnapshots() {
+		return noSnapshots;
+	}
+
+	public String getBuildType() {
+		return buildType;
+	}
+
+	public String getPomFile() {
+		return pomFile;
+	}
+
 	@Extension
 	public static final class DescriptorImpl extends
 			BuildStepDescriptor<Builder> {
