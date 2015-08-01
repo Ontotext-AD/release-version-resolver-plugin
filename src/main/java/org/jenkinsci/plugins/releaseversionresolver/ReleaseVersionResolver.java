@@ -49,7 +49,7 @@ public class ReleaseVersionResolver extends Builder {
 
 	private boolean resolveReleaseVersions(AbstractBuild build, BuildListener listener) throws IOException, InterruptedException {
 		boolean result = true;
-		listener.started(build.getCauses());
+
 		String currentVersionString = getCurrentVersion(listener, build);
 		if (currentVersionString != null) {
 			Version releaseVersion = getReleaseVersion(currentVersionString, listener, build);
