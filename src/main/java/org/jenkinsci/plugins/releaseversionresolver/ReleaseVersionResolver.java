@@ -1,11 +1,14 @@
-package hudson.plugins.releaseversionresolver;
+package org.jenkinsci.plugins.releaseversionresolver;
 
 import com.github.zafarkhaja.semver.Version;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.Util;
-import hudson.model.*;
+import hudson.model.AbstractBuild;
+import hudson.model.AbstractProject;
+import hudson.model.BuildListener;
+import hudson.model.Result;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.VariableResolver;
@@ -13,14 +16,17 @@ import net.sf.json.JSONObject;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+import org.jenkinsci.lib.envinject.EnvInjectLogger;
+import org.jenkinsci.plugins.envinject.EnvInjectBuilderContributionAction;
+import org.jenkinsci.plugins.envinject.service.EnvInjectVariableGetter;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ReleaseVersionResolver extends Builder {
 
@@ -43,33 +49,63 @@ public class ReleaseVersionResolver extends Builder {
 
 	private boolean resolveReleaseVersions(AbstractBuild build, BuildListener listener) throws IOException, InterruptedException {
 		boolean result = true;
+		listener.started(build.getCauses());
 		String currentVersionString = getCurrentVersion(listener, build);
-		Version releaseVersion = getReleaseVersion(currentVersionString, listener, build);
-		Version developmentVersion = getDevelopmentVersion(releaseVersion, listener);
-		if (releaseVersion == null) {
-			listener.getLogger().println("Failed to resolve release version");
-			result = false;
-		} else if (developmentVersion == null) {
-			listener.getLogger().println("Failed to resolve development version");
-			result = false;
-		} else {
-			String message =
-					String.format("Final release version [%s] and development version [%s]", releaseVersion,
-							developmentVersion);
-			listener.getLogger().println(message);
+		if (currentVersionString != null) {
+			Version releaseVersion = getReleaseVersion(currentVersionString, listener, build);
+			Version developmentVersion = getDevelopmentVersion(releaseVersion, listener);
+			if (releaseVersion == null) {
+				listener.fatalError("Failed to resolve release version");
+				listener.finished(Result.FAILURE);
+				result = false;
+			} else if (developmentVersion == null) {
+				listener.fatalError("Failed to resolve development version");
+				listener.finished(Result.FAILURE);
+				result = false;
+			} else {
+				String message =
+						String.format("Final release version [%s] and development version [%s]", releaseVersion,
+								developmentVersion);
+				listener.getLogger().println(message);
 
-			setVersionsAsEnvironmentVariable(releaseVersion.toString(), developmentVersion.toString(), build);
+				if (setVersionsAsEnvironmentVariable(releaseVersion.toString(), developmentVersion.toString(), build, listener)) {
+					listener.finished(Result.SUCCESS);
+				} else {
+					listener.finished(Result.FAILURE);
+					result = false;
+				}
+			}
+		} else {
+			listener.finished(Result.FAILURE);
+			result = false;
 		}
 
 		return result;
 	}
 
-	private static void setVersionsAsEnvironmentVariable(String releaseVersion, String developmentVersion,
-			AbstractBuild<?, ?> build) {
-		List<ParameterValue> params = new ArrayList<ParameterValue>();
-		params.add(new StringParameterValue("RELEASE_VERSION", releaseVersion));
-		params.add(new StringParameterValue("DEVELOPMENT_VERSION", developmentVersion));
-		build.addAction(new ParametersAction(params));
+	private boolean setVersionsAsEnvironmentVariable(String releaseVersion, String developmentVersion,
+			AbstractBuild<?, ?> build, BuildListener listener) {
+		boolean result = true;
+
+		EnvInjectLogger logger = new EnvInjectLogger(listener);
+
+		try {
+			EnvInjectVariableGetter variableGetter = new EnvInjectVariableGetter();
+			Map<String, String> previousEnvVars = variableGetter.getEnvVarsPreviousSteps(build, logger);
+
+			Map<String, String> variables = new HashMap<String, String>(previousEnvVars);
+			variables.put("RELEASE_VERSION", releaseVersion);
+			variables.put("DEVELOPMENT_VERSION", developmentVersion);
+
+			variables.putAll(build.getBuildVariables());
+
+			build.addAction(new EnvInjectBuilderContributionAction(variables));
+		} catch (Exception e) {
+			logger.error(
+					"Problems occurs on injecting release and developing env vars: " + e.getMessage());
+			result = false;
+		}
+		return result;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -95,9 +131,7 @@ public class ReleaseVersionResolver extends Builder {
 				result = builder.build();
 			}
 		} else {
-			String message =
-					String.format("Build type [%s] is not recognizable", resolvedBuildType);
-			listener.getLogger().println(message);
+			listener.fatalError("Build type [%s] is not recognizable", resolvedBuildType);
 		}
 
 		return result;
@@ -122,17 +156,12 @@ public class ReleaseVersionResolver extends Builder {
 			model = mavenXpp3Reader.read(reader);
 			result = model.getVersion();
 		} catch (FileNotFoundException e) {
-			String message = String.format("Unable to find pom file [%s], [%s]", resolvedPomFile,
+			listener.fatalError("Unable to find pom file [%s], [%s]", resolvedPomFile,
 					e.getMessage());
-			listener.getLogger().println(message);
 		} catch (XmlPullParserException e) {
-			String message =
-					String.format("A error occurred during parsing of pom file [%s], [%s]", resolvedPomFile, e.getMessage());
-			listener.getLogger().println(message);
+			listener.fatalError("A error occurred during parsing of pom file [%s], [%s]", resolvedPomFile, e.getMessage());
 		} catch (IOException e) {
-			String message =
-					String.format("A error occurred during reading of pom file [%s], [%s]", resolvedPomFile, e.getMessage());
-			listener.getLogger().println(message);
+			listener.fatalError("A error occurred during reading of pom file [%s], [%s]", resolvedPomFile, e.getMessage());
 		}
 
 		return result;
