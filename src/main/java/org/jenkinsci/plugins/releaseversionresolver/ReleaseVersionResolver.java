@@ -8,7 +8,6 @@ import hudson.Util;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
 import hudson.model.BuildListener;
-import hudson.model.Result;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.VariableResolver;
@@ -56,11 +55,9 @@ public class ReleaseVersionResolver extends Builder {
 			Version developmentVersion = getDevelopmentVersion(releaseVersion, listener);
 			if (releaseVersion == null) {
 				listener.fatalError("Failed to resolve release version");
-				listener.finished(Result.FAILURE);
 				result = false;
 			} else if (developmentVersion == null) {
 				listener.fatalError("Failed to resolve development version");
-				listener.finished(Result.FAILURE);
 				result = false;
 			} else {
 				String message =
@@ -69,14 +66,11 @@ public class ReleaseVersionResolver extends Builder {
 				listener.getLogger().println(message);
 
 				if (setVersionsAsEnvironmentVariable(releaseVersion.toString(), developmentVersion.toString(), build, listener)) {
-					listener.finished(Result.SUCCESS);
 				} else {
-					listener.finished(Result.FAILURE);
 					result = false;
 				}
 			}
 		} else {
-			listener.finished(Result.FAILURE);
 			result = false;
 		}
 
