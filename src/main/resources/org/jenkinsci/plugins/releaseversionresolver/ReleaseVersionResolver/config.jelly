@@ -1,0 +1,12 @@
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define"
+	xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+	<f:entry title="${%Build Type}" field="buildType" description="The type of build you are about to preform in order to release. The version is resolved based on current semantic version in format `major.minor.patch` . Possible options are: patch, minor, major.">
+		<f:textbox default="$${BUILD_TYPE}" />
+	</f:entry>
+	<f:entry title="${%Pom File}" field="pomFile" description="If your workspace has the top-level pom.xml in somewhere other than the 1st module's root directory, specify the path (relative to the module root) here, such as parent/pom.xml. If left empty, defaults to pom.xml">
+		<f:textbox default="pom.xml" />
+	</f:entry>
+	<f:entry title="${%No snapshots versioning}" description="Versioning without snapshots pre-releases.">
+		<f:checkbox field="noSnapshots" default="pom.xml" checked="it.${noSnapshots}" />
+	</f:entry>
+</j:jelly>
